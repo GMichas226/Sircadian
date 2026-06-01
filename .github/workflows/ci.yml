@@ -1,0 +1,24 @@
+name: CI
+
+# Build the host test and run it on every push and pull request. Warnings are
+# treated as errors (-Werror) so the build stays clean.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build host test
+        run: |
+          g++ -std=c++17 -I src \
+              src/SolarModel.cpp src/SolarFit.cpp src/DriftClock.cpp \
+              test/test_fit.cpp -o test_fit \
+              -Wall -Wextra -Werror
+
+      - name: Run host test
+        run: ./test_fit
