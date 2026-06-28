@@ -6,7 +6,9 @@
 // Recover a clock's time offset by aligning a measured day of per-minute light
 // samples against the SolarModel curve. Input obs[m] is the mean reading for
 // local minute-of-day m, or `noData` for an unsampled minute. The accept gates
-// (well-sampled / low-residual / unambiguous) are what reject cloudy days.
+// reject poorly-sampled and noisy days (well-sampled / low-residual / sharp-peak).
+// NOTE: the "unambiguity" gate is a peak-sharpness / SNR proxy, not a two-noon
+// detector -- it does not reject a genuinely bimodal cost surface (see fitDay).
 
 namespace solar {
 

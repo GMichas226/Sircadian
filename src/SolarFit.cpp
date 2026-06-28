@@ -9,41 +9,52 @@ using std::isfinite;
 // Scratch for the theoretical curve (~5.6 KB). File-static to keep it off the
 // stack and heap; safe only because fitDay is serial -- do not call it
 // re-entrantly.
-static float g_ith[SIRCADIAN_MINUTES_PER_DAY];
+// thread_local so concurrent fitDay calls on different threads (the Phase B
+// Monte-Carlo workers) each get private scratch; single-threaded behavior is
+// unchanged. ~8.6 KB per thread.
+static thread_local float g_ith[SIRCADIAN_MINUTES_PER_DAY];
 
-// Wrap an index into [0, day) without a modulo (the shift is bounded).
+// Contributing-sample indices for the current fitDay, built once per call and
+// reused across the tau sweep. Per-thread, like g_ith.
+static thread_local int16_t g_obsIdx[SIRCADIAN_MINUTES_PER_DAY];
+
+// Wrap an index into [0, day) without a modulo (the shift is bounded). The single
+// correction is valid only while the argument stays in [-day, 2*day); the
+// static_asserts below guarantee the configured bounds keep it there.
 static inline int wrapDay(int i) {
     if (i < 0)                          i += SIRCADIAN_MINUTES_PER_DAY;
     if (i >= SIRCADIAN_MINUTES_PER_DAY) i -= SIRCADIAN_MINUTES_PER_DAY;
     return i;
 }
 
-// Closed-form SSE of the best-amplitude fit at shift `tau` over the cost
-// window [lo,hi]. alpha = sum(o*p)/sum(p*p); SSE = sum(o^2) - num^2/den.
-// Returns DBL_MAX if too few points contribute. Optionally reports alpha
-// and the contributing-sample count.
-static double sseAtTau(int tau, int lo, int hi, const uint16_t* obs,
-                       uint16_t noData, float* outAlpha, int* outN) {
-    double sumOP = 0.0, sumPP = 0.0, sumOO = 0.0;
-    int n = 0;
-    for (int t = lo; t <= hi; ++t) {
-        int ti = wrapDay(t);
-        uint16_t v = obs[ti];
-        if (v == noData) continue;
+static_assert(SIRCADIAN_SHIFT_RANGE_MIN <= SIRCADIAN_MINUTES_PER_DAY,
+              "wrapDay single-wrap requires shift range <= one day");
+static_assert(SIRCADIAN_COST_HALF_WINDOW_MIN < SIRCADIAN_MINUTES_PER_DAY,
+              "wrapDay single-wrap requires half-window < one day");
+
+// Closed-form SSE of the best-amplitude fit at shift `tau` over the pre-built
+// contributing set (indices idx[0..nContrib), with sumOO = sum(o^2) supplied --
+// both are tau-invariant, so fitDay builds them once). alpha = sum(o*p)/sum(p*p);
+// SSE = sum(o^2) - num^2/den. Returns DBL_MAX if too few points contribute.
+// Optionally reports alpha and the contributing-sample count.
+static double sseAtTau(int tau, const int16_t* idx, int nContrib,
+                       const uint16_t* obs, double sumOO,
+                       float* outAlpha, int* outN) {
+    double sumOP = 0.0, sumPP = 0.0;
+    for (int k = 0; k < nContrib; ++k) {
+        int ti = idx[k];
         float p = g_ith[wrapDay(ti - tau)];
-        double o = (double)v;
+        double o = (double)obs[ti];
         sumOP += o * p;
         sumPP += (double)p * p;
-        sumOO += o * o;
-        ++n;
     }
-    if (n < SIRCADIAN_MIN_FIT_POINTS || sumPP < 1e-6) {
+    if (nContrib < SIRCADIAN_MIN_FIT_POINTS || sumPP < 1e-6) {
         if (outAlpha) *outAlpha = NAN;
-        if (outN) *outN = n;
+        if (outN) *outN = nContrib;
         return DBL_MAX;
     }
     if (outAlpha) *outAlpha = (float)(sumOP / sumPP);
-    if (outN) *outN = n;
+    if (outN) *outN = nContrib;
     return sumOO - (sumOP * sumOP) / sumPP;
 }
 
@@ -68,6 +79,19 @@ FitResult fitDay(int doy, const uint16_t* obs, uint16_t noData,
     int lo    = noonI - cfg.costHalfWindowMin;
     int hi    = noonI + cfg.costHalfWindowMin;
 
+    // Pre-pass: gather the contributing samples once. The set and sum(o^2) are
+    // tau-invariant, so building them here keeps them out of the tau sweep.
+    int    nContrib = 0;
+    double sumOO    = 0.0;
+    for (int t = lo; t <= hi; ++t) {
+        int ti = wrapDay(t);
+        uint16_t v = obs[ti];
+        if (v == noData) continue;
+        g_obsIdx[nContrib++] = (int16_t)ti;
+        double o = (double)v;
+        sumOO += o * o;
+    }
+
     int    bestTau   = 0;
     double bestSse   = DBL_MAX;
     double nextBest  = DBL_MAX;
@@ -76,7 +100,7 @@ FitResult fitDay(int doy, const uint16_t* obs, uint16_t noData,
 
     for (int tau = -cfg.shiftRangeMin; tau <= cfg.shiftRangeMin; ++tau) {
         float alpha; int n;
-        double sse = sseAtTau(tau, lo, hi, obs, noData, &alpha, &n);
+        double sse = sseAtTau(tau, g_obsIdx, nContrib, obs, sumOO, &alpha, &n);
         if (sse >= DBL_MAX) continue;
         if (sse < bestSse) {
             nextBest  = bestSse;
@@ -100,10 +124,10 @@ FitResult fitDay(int doy, const uint16_t* obs, uint16_t noData,
 
     // Parabolic sub-minute refinement on (tau-1, tau, tau+1).
     if (bestTau > -cfg.shiftRangeMin && bestTau < cfg.shiftRangeMin) {
-        double sLo = sseAtTau(bestTau - 1, lo, hi, obs, noData, nullptr, nullptr);
-        double sHi = sseAtTau(bestTau + 1, lo, hi, obs, noData, nullptr, nullptr);
+        double sLo = sseAtTau(bestTau - 1, g_obsIdx, nContrib, obs, sumOO, nullptr, nullptr);
+        double sHi = sseAtTau(bestTau + 1, g_obsIdx, nContrib, obs, sumOO, nullptr, nullptr);
         double denom = (sLo - 2.0 * bestSse + sHi);
-        if (denom > 1e-6 && isfinite(sLo) && isfinite(sHi)) {
+        if (denom > 1e-6 && sLo < DBL_MAX && sHi < DBL_MAX) {
             float refine = 0.5f * (float)((sLo - sHi) / denom);
             if (refine > -1.0f && refine < 1.0f) {
                 r.shiftMin = (float)bestTau + refine;
@@ -131,10 +155,7 @@ FitResult fitDay(int doy, const uint16_t* obs, uint16_t noData,
 
     r.fullCurve = (r.nUsed >= cfg.fullCurveMinPoints);
 
-    float tFit = r.noonExpMin + r.shiftMin;
-    while (tFit < 0.0f)     tFit += 1440.0f;
-    while (tFit >= 1440.0f) tFit -= 1440.0f;
-    r.noonFitMin = tFit;
+    r.noonFitMin = wrapMinutesOfDay(r.noonExpMin + r.shiftMin);
 
     return r;
 }
@@ -153,11 +174,13 @@ FitResult fitBestOfDays(const int* doys, int nDoys, const uint16_t* obs,
 
 int32_t driftPpmFromShift(float shiftMin, int32_t secondsSinceSync,
                           int32_t maxPpmStep) {
-    if (secondsSinceSync <= 0) return 0;
-    int32_t ppm = (int32_t)((double)shiftMin * 60.0 * 1e6 / (double)secondsSinceSync);
+    if (secondsSinceSync <= 0 || !isfinite(shiftMin)) return 0;
+    // Clamp in double before the cast: a large shift over a short interval can
+    // exceed INT32_MAX, and casting an out-of-range double to int32_t is UB.
+    double ppm = (double)shiftMin * 60.0 * 1e6 / (double)secondsSinceSync;
     if (ppm >  maxPpmStep) ppm =  maxPpmStep;
     if (ppm < -maxPpmStep) ppm = -maxPpmStep;
-    return ppm;
+    return (int32_t)ppm;
 }
 
 }  // namespace solar

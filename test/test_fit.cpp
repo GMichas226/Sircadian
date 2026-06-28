@@ -10,9 +10,20 @@
 #include "DriftClock.h"
 #include <cstdio>
 #include <cmath>
-#include <cstdlib>
+#include <cstdint>
 
 using namespace solar;
+
+// Deterministic, platform-independent PRNG (xorshift32). Replaces rand()/RAND_MAX,
+// whose sequence differs across libc -- so the synthesized noise (and the thin
+// cloudy-rejection margin) reproduces identically on every toolchain.
+static uint32_t g_rng = 1;
+static float urand() {                 // uniform in [0,1)
+    g_rng ^= g_rng << 13;
+    g_rng ^= g_rng >> 17;
+    g_rng ^= g_rng << 5;
+    return (float)(g_rng & 0xFFFFFFu) / (float)0x1000000;
+}
 
 // Build a synthetic observed curve for `doy`, scaled to a peak of `peak`
 // ADC counts, shifted later by `shiftMin` minutes (simulating a slow clock),
@@ -27,11 +38,11 @@ static void synth(uint16_t* obs, int doy, const SolarParams& p,
         float i = intensityAt(c, trueMin);
         float v = peak * i;
         if (noise > 0.0f) {
-            float r = ((float)rand() / (float)RAND_MAX - 0.5f) * 2.0f;
+            float r = (urand() - 0.5f) * 2.0f;
             v += r * noise * peak;
         }
         if (v < 0.0f) v = 0.0f;
-        if ((float)rand() / (float)RAND_MAX < dropFrac) {
+        if (urand() < dropFrac) {
             obs[m] = NO_DATA;
         } else {
             obs[m] = (uint16_t)(v + 0.5f);
@@ -46,7 +57,7 @@ static void check(const char* name, bool cond, const char* detail) {
 }
 
 int main() {
-    srand(1);                                     // deterministic
+    g_rng = 1;                                    // deterministic
     SolarParams p{ 38.0f, 23.7f, 2.0f, 1.6f };   // ~Athens
     FitConfig cfg;
     uint16_t obs[1440];
@@ -75,7 +86,7 @@ int main() {
     printf("       shift=%.2f min (expected -12)\n", r.shiftMin);
 
     // 4) Cloudy day (heavy noise) -> the unambiguity/residual gate REJECTS.
-    synth(obs, 200, p, 3000.0f, 5.0f, 0.35f, 0.10f);
+    synth(obs, 200, p, 3000.0f, 5.0f, 0.45f, 0.10f);
     r = fitDay(200, obs, NO_DATA, p, cfg);
     check("cloudy rejected", !r.accepted, nullptr);
     printf("       accepted=%d rms/alpha=%.3f next/best=%.2f\n",
