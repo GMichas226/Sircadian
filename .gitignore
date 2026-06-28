@@ -2,6 +2,19 @@
 *.o
 *.obj
 test_fit
+test_sim
+sim_run
+sim_out/
+runs/
 build/
 .pio/
 .vscode/
+__pycache__/
+*.pyc
+.venv/
+
+# Local analysis tooling / generated digests (not part of the project)
+tools/analyze_run.py
+tools/digest.md
+tools/digest.json
+handoff.md

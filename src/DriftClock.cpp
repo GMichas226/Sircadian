@@ -25,8 +25,8 @@ int32_t DriftClock::secondsSinceSync() const {
 }
 
 int32_t DriftClock::localSecondOfDay(float tzHours) const {
+    if (!synced_) return -1;
     int64_t epMs = epochMs();
-    if (epMs == 0) return -1;
     int64_t tzSec    = (int64_t)(tzHours * 3600.0f);
     int64_t localSec = epMs / 1000 + tzSec;
     int32_t sod = (int32_t)(localSec % 86400LL);
@@ -41,8 +41,8 @@ int16_t DriftClock::localMinuteOfDay(float tzHours) const {
 }
 
 int16_t DriftClock::dayOfYear(float tzHours) const {
+    if (!synced_) return -1;
     int64_t epMs = epochMs();
-    if (epMs == 0) return -1;
     time_t local = (time_t)(epMs / 1000 + (int64_t)(tzHours * 3600.0f));
     struct tm tmv;
 #if defined(_WIN32)

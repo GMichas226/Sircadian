@@ -92,6 +92,47 @@ The test synthesizes days of light readings at known offsets and checks that
 the fit recovers them (sub-minute), that a cloudy day is rejected, and that the
 drift math and clock correction have the right sign and scale.
 
+## Simulator & dashboard
+
+[`sim/`](sim/) is a deployment-level simulator that exercises the **real
+firmware** in `src/` (`SolarModel`, `SolarFit`, `DriftClock`) unchanged — so the
+sim doubles as end-to-end validation. A *run* is a **fleet of deployments**: many
+copies of one configuration, each a device dropped into its own randomly-rolled
+world, simulated **one process per deployment** (1 core per run).
+
+Beyond validation, the sim provides the error figures that guide firmware tuning.
+The discipline code in `src/` is adjusted against the metrics the fleet reports —
+steady-state clock error, time-to-converge, and accepted-fit fraction — one change
+at a time, keeping a change when those metrics improve and reverting it when they
+don't. The git history records that process, and `main` holds the lowest-error
+configuration measured so far. This commit is the starting baseline; the README is
+not re-edited for each tuning step.
+
+Each deployment is a coherent, layered, analytic world (deterministic given its
+seed): season + synoptic weather → cloud regime → intraday clear-sky-index trace;
+outdoor temperature → room thermal transfer (lag + greenhouse gain) → indoor
+temperature; the oscillator drifts off **indoor** temperature, and a nonlinear,
+temperature-dependent photoresistor logs the cloud-attenuated light. Climate, room,
+sensor unit, and oscillator characteristics are **rolled once per deployment**;
+the daily weather plays out within them. Each process is modeled to be realistic
+on its own terms — never tuned to provoke or flatter the discipline algorithm.
+
+Build and drive it from the CLI:
+
+```sh
+g++ -std=c++17 -O2 -I src -I sim \
+    src/SolarModel.cpp src/SolarFit.cpp src/DriftClock.cpp \
+    sim/World.cpp sim/Deployment.cpp sim/Engine.cpp sim/sim.cpp \
+    -o sim_run -Wall -Wextra -Werror
+sim_run --dump-defaults run.json          # editable default config
+sim_run --config run.json                 # run the fleet (serial) + summary.csv
+```
+
+Or use the desktop control surface in [`dashboard/`](dashboard/README.md)
+(PySide6 + pyqtgraph): configure every parameter, build, launch the fleet across
+cores, and explore Monte-Carlo and per-deployment views. The engine sanity test is
+[`test/test_sim.cpp`](test/test_sim.cpp).
+
 ## Configuration
 
 Site and tuning values live in [`src/config.h`](src/config.h) as `#define`s,

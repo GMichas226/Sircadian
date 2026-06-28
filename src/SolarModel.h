@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include "config.h"
 
 // Clear-sky reference curve: theoretical relative light intensity over a day
 // for a given date and location. Pure math; the only coupling to the rest of
@@ -25,6 +26,14 @@ struct SolarCurve {
     float noonMin;   // local-minute-of-day of solar noon for this day
     float atmK;
 };
+
+// Wrap a minute-of-day value into [0, SIRCADIAN_MINUTES_PER_DAY). Single source
+// for the day-length wrap shared by prepareCurve and SolarFit.
+inline float wrapMinutesOfDay(float m) {
+    while (m < 0.0f)                              m += (float)SIRCADIAN_MINUTES_PER_DAY;
+    while (m >= (float)SIRCADIAN_MINUTES_PER_DAY) m -= (float)SIRCADIAN_MINUTES_PER_DAY;
+    return m;
+}
 
 // Spencer-71 declination (radians) from gamma = 2*pi*(doy-1)/365.
 float solarDeclination(float gamma);

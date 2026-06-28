@@ -36,9 +36,7 @@ void prepareCurve(SolarCurve& c, int doy, const SolarParams& p) {
     c.cosLat   = cosf(latR);
     c.sinDecl  = sinf(decl);
     c.cosDecl  = cosf(decl);
-    c.noonMin  = 720.0f - E + 4.0f * (p.tz * 15.0f - p.lon);
-    while (c.noonMin < 0.0f)     c.noonMin += 1440.0f;
-    while (c.noonMin >= 1440.0f) c.noonMin -= 1440.0f;
+    c.noonMin  = wrapMinutesOfDay(720.0f - E + 4.0f * (p.tz * 15.0f - p.lon));
     c.atmK     = p.atmK;
 }
 
