@@ -16,7 +16,7 @@ jobs:
       - name: Build firmware test
         run: |
           g++ -std=c++17 -I src \
-              src/SolarModel.cpp src/SolarFit.cpp src/DriftClock.cpp \
+              src/SolarModel.cpp src/SolarFit.cpp src/DriftClock.cpp src/Discipline.cpp \
               test/test_fit.cpp -o test_fit \
               -Wall -Wextra -Werror
 
@@ -26,11 +26,11 @@ jobs:
       - name: Build simulator + engine test
         run: |
           g++ -std=c++17 -O2 -I src -I sim \
-              src/SolarModel.cpp src/SolarFit.cpp src/DriftClock.cpp \
+              src/SolarModel.cpp src/SolarFit.cpp src/DriftClock.cpp src/Discipline.cpp \
               sim/World.cpp sim/Deployment.cpp sim/Engine.cpp sim/sim.cpp \
               -o sim_run -Wall -Wextra -Werror
           g++ -std=c++17 -O2 -I src -I sim \
-              src/SolarModel.cpp src/SolarFit.cpp src/DriftClock.cpp \
+              src/SolarModel.cpp src/SolarFit.cpp src/DriftClock.cpp src/Discipline.cpp \
               sim/World.cpp sim/Deployment.cpp sim/Engine.cpp \
               test/test_sim.cpp -o test_sim -Wall -Wextra -Werror
 

@@ -15,6 +15,10 @@ SCALAR_SECTIONS = [
         ("fit.minUsedPoints", "i"), ("fit.fullCurveMinPoints", "i"),
         ("fit.maxRmsOverAlpha", "f"), ("fit.unambiguityFactor", "f"),
         ("fit.minAlpha", "f"), ("fit.maxAlpha", "f")]),
+    ("Discipline (loop)", [
+        ("discipline.offsetGain", "f"), ("discipline.rateMode", "i"),
+        ("discipline.rateGain", "f"), ("discipline.rateWindowFits", "i"),
+        ("discipline.acqGain", "f"), ("discipline.acqFits", "i")]),
     ("Cloud physics (universal)", [
         ("cloud.synopticTauDays", "f"), ("cloud.synopticStd", "f"),
         ("cloud.diffuseFrac", "f"),

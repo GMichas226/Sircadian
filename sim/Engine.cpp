@@ -3,6 +3,7 @@
 #include "SolarModel.h"
 #include "SolarFit.h"
 #include "DriftClock.h"
+#include "Discipline.h"
 #include <cmath>
 #include <ctime>
 #include <algorithm>
@@ -48,6 +49,11 @@ DeploymentResult simulateDeployment(const RunConfig& cfg, uint32_t index, bool d
     int64_t trueEpoch = cfg.startEpochMs;
     clk.setEpochMs(trueEpoch + cfg.initialOffsetMs);   // imperfect initial sync
     clk.setDriftPpm(0);
+
+    // Shared discipline policy (see src/Discipline.h). Default config is the tuned
+    // loop (fractional offset nudge + EMA rate); the historical loop is offsetGain=1,
+    // rateMode=0.
+    solar::Discipline disc(cfg.discipline, cfg.maxPpmStep);
 
     const double yearMs = 365.25 * 86400.0 * 1000.0;
     const int    cadence = std::max(1, cfg.cadenceDays);
@@ -96,11 +102,7 @@ DeploymentResult simulateDeployment(const RunConfig& cfg, uint32_t index, bool d
 
             if (r.accepted) {
                 ++accepts; curGap = 0;
-                int32_t step = solar::driftPpmFromShift(
-                    r.shiftMin, clk.secondsSinceSync(), cfg.maxPpmStep);
-                clk.setDriftPpm(clk.driftPpm() - step);           // rate correction
-                int64_t shiftMs = (int64_t)((double)r.shiftMin * 60000.0);
-                clk.setEpochMs(reported - shiftMs);               // re-anchor offset
+                disc.onAcceptedFit(clk, r, reported);
             } else {
                 ++curGap; longestGap = std::max(longestGap, curGap);
             }
@@ -143,9 +145,21 @@ DeploymentResult simulateDeployment(const RunConfig& cfg, uint32_t index, bool d
     res.steadyErrMs = cnt ? std::sqrt(ss / cnt) : 0.0;
     res.maxErrMs    = mx;
 
+    // Convergence = settling of the STARTUP transient relative to the deployment's
+    // own steady-state, not a fixed absolute target. The irreducible daily-fit floor
+    // is many minutes, so the old fixed 1-min threshold reported "never" for most
+    // units. The band must clear the *seasonal* steady-state ripple or it fires every
+    // winter, so it is set from the peak |err| over the second half of the run (which
+    // spans all seasons in steady state), with an absolute floor. convergence_day is
+    // the first day after which the error never again exceeds that band.
+    double steadyEnv = 0.0;
+    for (int i = cfg.horizonDays / 2; i < cfg.horizonDays; ++i)
+        steadyEnv = std::max(steadyEnv, std::fabs(errHist[i]));
+    const double convFloorMs = 300000.0;                       // 5 min absolute floor
+    const double convThresh  = std::max(convFloorMs, 1.25 * steadyEnv);
     int lastBad = -1;
     for (int i = 0; i < cfg.horizonDays; ++i)
-        if (std::fabs(errHist[i]) >= 60000.0) lastBad = i;   // >= 1 min off
+        if (std::fabs(errHist[i]) >= convThresh) lastBad = i;
     res.convergenceDay = (lastBad < 0) ? 0
                        : (lastBad + 1 < cfg.horizonDays ? lastBad + 1 : -1);
     return res;
