@@ -15,7 +15,7 @@ import runs as runlib
 
 # CI build flags (match .github/workflows/ci.yml).
 SIM_SOURCES = [
-    "src/SolarModel.cpp", "src/SolarFit.cpp", "src/DriftClock.cpp",
+    "src/SolarModel.cpp", "src/SolarFit.cpp", "src/DriftClock.cpp", "src/Discipline.cpp",
     "sim/World.cpp", "sim/Deployment.cpp", "sim/Engine.cpp", "sim/sim.cpp",
 ]
 
@@ -96,6 +96,22 @@ def default_config(binary):
         cfg = json.load(fh)
     os.remove(f)
     return cfg
+
+
+def deep_merge(base, override):
+    """Recursively merge `override` onto `base`, returning a new dict.
+
+    Dicts merge key-by-key; any non-dict value in `override` wins. Used to seed a
+    saved config from the engine defaults so a config missing a whole block (e.g.
+    one that predates `discipline`) inherits the default block instead of having the
+    GUI form zero it out. Keys present in `override` (even with value 0) are honored.
+    """
+    if not isinstance(base, dict) or not isinstance(override, dict):
+        return override
+    out = dict(base)
+    for k, v in override.items():
+        out[k] = deep_merge(base.get(k), v) if isinstance(v, dict) else v
+    return out
 
 
 def last_config():

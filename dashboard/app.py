@@ -44,8 +44,14 @@ class MainWindow(QMainWindow):
         self.resize(1280, 860)
 
         self.binary = runlib.sim_binary()
-        self.cfg = sim.last_config() or (
-            sim.default_config(self.binary) if self.binary else None)
+        # Seed from engine defaults and merge the saved config on top, so a config
+        # that predates a schema block (e.g. `discipline`) inherits the default block
+        # instead of the form zeroing the missing fields. Without a binary there are
+        # no defaults yet; fall back to the saved config raw (on_build backfills).
+        defaults = sim.default_config(self.binary) if self.binary else None
+        saved = sim.last_config()
+        self.cfg = (sim.deep_merge(defaults, saved) if defaults and saved
+                    else saved or defaults)
         self.widgets = {}        # path -> (kind, widget) or ("range", lo, hi)
         self.worker = None
 
@@ -209,6 +215,16 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Run", "Build the sim first.")
             return
         cfg = self.collect_config()
+        disc = cfg.get("discipline", {})
+        if disc.get("offsetGain", 1.0) == 0 and disc.get("acqFits", 0) <= 0:
+            if QMessageBox.warning(
+                    self, "Open phase loop",
+                    "discipline.offsetGain = 0 opens the phase loop: the clock's "
+                    "offset is never corrected toward the measured shift, so error "
+                    "grows without bound. Run anyway?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No) != QMessageBox.Yes:
+                return
         run_dir = runlib.new_run_dir()
         sim.write_run_config(run_dir, cfg)
         self.run_btn.setEnabled(False)

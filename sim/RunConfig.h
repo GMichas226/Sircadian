@@ -3,6 +3,7 @@
 #include <string>
 #include "SolarModel.h"
 #include "SolarFit.h"
+#include "Discipline.h"
 #include "config.h"
 #include "Deployment.h"
 #include "World.h"
@@ -36,6 +37,8 @@ struct RunConfig {
 
     solar::FitConfig fit {};
     int32_t maxPpmStep = SIRCADIAN_MAX_PPM_STEP;
+    solar::DisciplineConfig discipline {};   // loop gains; defaults == tuned loop (set
+                                             // offsetGain=1, rateMode=0 for historical)
 
     // World physics: universal, editable, never rolled per deployment.
     CloudPhysics  cloud {};

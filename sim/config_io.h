@@ -28,6 +28,10 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
     costHalfWindowMin, shiftRangeMin, minUsedPoints, fullCurveMinPoints,
     maxRmsOverAlpha, unambiguityFactor, minAlpha, maxAlpha)
 
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
+    DisciplineConfig,
+    offsetGain, rateMode, rateGain, rateWindowFits, acqGain, acqFits)
+
 }  // namespace solar
 
 namespace sim {
@@ -57,7 +61,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
     RunConfig,
     startEpochMs, horizonDays, cadenceDays, initialOffsetMs,
-    fit, maxPpmStep, cloud, temp, sensor, ranges,
+    fit, maxPpmStep, discipline, cloud, temp, sensor, ranges,
     numDeployments, seedBase, detailedDeployment, curveStrideDays, outDir)
 
 }  // namespace sim
