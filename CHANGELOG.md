@@ -29,7 +29,7 @@ First packaged release (Arduino library layout, `library.properties`,
   config plumbing.
 - Host tests: `test_clock`, `test_facade` (bit-exact parity with the
   pre-facade loop, plus a light-correction case); CI compiles all examples for
-  AVR (Mega) and ESP32.
+  ESP32 and ESP8266.
 
 ### Changed
 - `DriftClock::dayOfYear()` now uses arithmetic civil-date math (no
