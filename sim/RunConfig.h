@@ -40,6 +40,12 @@ struct RunConfig {
     solar::DisciplineConfig discipline {};   // loop gains; defaults == tuned loop (set
                                              // offsetGain=1, rateMode=0 for historical)
 
+    // Light-sensor temperature correction (device-side; the truth physics is
+    // unaffected): the unit's bench-calibrated tempco/dark (with rolled
+    // calibration error, see DeploymentRanges) undoes the photoresistor's
+    // thermal gain per sample.
+    bool  lightCompEnabled     = false;
+
     // World physics: universal, editable, never rolled per deployment.
     CloudPhysics  cloud {};
     TempPhysics   temp {};

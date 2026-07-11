@@ -14,6 +14,7 @@ World::World(const solar::SolarParams& truth, const DeploymentParams& dp,
              const SensorPhysics& sensor, uint64_t seed)
     : truth_(truth), dp_(dp), cloud_(cloud), temp_(temp), sensor_(sensor),
       weatherRng_(seed), sensorRng_(seed ^ 0x5DEECE66D2A1B3C7ULL),
+      tempSensRng_(seed ^ 0x9E3779B97F4A7C15ULL),
       roomState_(dp.tMeanC) {
     // Full overhead sun (Erel=1) at reference temperature maps to ~peakTarget
     // (then scaled by this unit's gain trim). Real noon irradiance is lower, so
@@ -102,6 +103,14 @@ double World::indoorTempC(int trueMin) const {
 }
 
 double World::noonIndoorTempC() const { return indoor_[noonMin_]; }
+
+double World::sensedTempC(int trueMin) {
+    double t = indoorTempC(trueMin) + dp_.tSensOffsetC +
+               dp_.tSensNoiseC * tempSensRng_.gaussian();
+    double q = sensor_.tSensQuantC;
+    if (q > 0.0) t = std::floor(t / q + 0.5) * q;
+    return t;
+}
 
 void World::sampleObs(uint16_t* obs, double clockErrMin) {
     const double maxIdx = (double)(MINS_PER_DAY - 1);

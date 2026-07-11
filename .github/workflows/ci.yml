@@ -1,7 +1,8 @@
 name: CI
 
-# Build the host test and run it on every push and pull request. Warnings are
-# treated as errors (-Werror) so the build stays clean.
+# Build the host tests and run them on every push and pull request, then
+# compile every Arduino example for AVR and ESP32. Warnings are treated as
+# errors (-Werror) so the build stays clean.
 
 on:
   push:
@@ -13,26 +14,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build firmware test
-        run: |
-          g++ -std=c++17 -I src \
-              src/SolarModel.cpp src/SolarFit.cpp src/DriftClock.cpp src/Discipline.cpp \
-              test/test_fit.cpp -o test_fit \
-              -Wall -Wextra -Werror
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
 
-      - name: Run firmware test
-        run: ./test_fit
+      - name: Build
+        run: cmake --build build --parallel
 
-      - name: Build simulator + engine test
-        run: |
-          g++ -std=c++17 -O2 -I src -I sim \
-              src/SolarModel.cpp src/SolarFit.cpp src/DriftClock.cpp src/Discipline.cpp \
-              sim/World.cpp sim/Deployment.cpp sim/Engine.cpp sim/sim.cpp \
-              -o sim_run -Wall -Wextra -Werror
-          g++ -std=c++17 -O2 -I src -I sim \
-              src/SolarModel.cpp src/SolarFit.cpp src/DriftClock.cpp src/Discipline.cpp \
-              sim/World.cpp sim/Deployment.cpp sim/Engine.cpp \
-              test/test_sim.cpp -o test_sim -Wall -Wextra -Werror
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
 
-      - name: Run engine test
-        run: ./test_sim
+  arduino-examples:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - fqbn: esp32:esp32:esp32
+            platforms: |
+              - name: esp32:esp32
+                source-url: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          - fqbn: arduino:avr:mega
+            platforms: |
+              - name: arduino:avr
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/compile-sketches@v1
+        with:
+          fqbn: ${{ matrix.fqbn }}
+          platforms: ${{ matrix.platforms }}
+          libraries: |
+            - source-path: ./
+            - name: OneWire
+            - name: DallasTemperature
+          sketch-paths: |
+            - examples
+          enable-warnings-report: true

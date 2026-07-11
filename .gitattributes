@@ -1,0 +1,10 @@
+# Keep library archives (git archive / registry exports) lean: development
+# and analysis material stays in the repo but out of the package.
+runs/ export-ignore
+sim/ export-ignore
+dashboard/ export-ignore
+test/ export-ignore
+tools/ export-ignore
+.github/ export-ignore
+handoff.md export-ignore
+CMakeLists.txt export-ignore

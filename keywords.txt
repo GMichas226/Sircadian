@@ -1,0 +1,54 @@
+#######################################
+# Syntax coloring for Sircadian
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+Sircadian	KEYWORD1
+SircadianConfig	KEYWORD1
+DriftClock	KEYWORD1
+Discipline	KEYWORD1
+SolarParams	KEYWORD1
+FitConfig	KEYWORD1
+FitResult	KEYWORD1
+DisciplineConfig	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+begin	KEYWORD2
+setEpochMs	KEYWORD2
+epochMs	KEYWORD2
+isSynced	KEYWORD2
+localMinuteOfDay	KEYWORD2
+dayOfYear	KEYWORD2
+addLightSample	KEYWORD2
+setTemperature	KEYWORD2
+correctLightSample	KEYWORD2
+service	KEYWORD2
+runFitNow	KEYWORD2
+lastFit	KEYWORD2
+appliedPpm	KEYWORD2
+lightBuffer	KEYWORD2
+clearDay	KEYWORD2
+exportState	KEYWORD2
+importState	KEYWORD2
+fitDay	KEYWORD2
+fitBestOfDays	KEYWORD2
+driftPpmFromShift	KEYWORD2
+prepareCurve	KEYWORD2
+intensityAt	KEYWORD2
+solarNoonMinutes	KEYWORD2
+slewRatePpm	KEYWORD2
+setDriftPpm	KEYWORD2
+driftPpm	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+NO_DATA	LITERAL1
+SIRCADIAN_MINUTES_PER_DAY	LITERAL1

@@ -2,6 +2,8 @@
 *.o
 *.obj
 test_fit
+test_clock
+test_facade
 test_sim
 sim_run
 sim_out/

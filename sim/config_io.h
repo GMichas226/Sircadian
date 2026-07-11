@@ -45,7 +45,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
     roomLagHours, greenhouseGainC,
     sensorGamma, sensorGain, sensorDarkAdc, sensorTempco,
     sensorNoiseFrac, sensorDropFrac,
-    oscPpm0, oscTempcoA, oscTurnoverC, oscAgingPpmPerYr)
+    oscPpm0, oscTempcoA, oscTurnoverC, oscAgingPpmPerYr,
+    tSensOffsetC, tSensNoiseC, lightCalErrFrac, lightCalDarkErrAdc)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(RegimeOptics, kbar, sigma, tauMin)
 
@@ -56,12 +57,13 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
     TempPhysics, summerPeakDoy, peakHour, diurnalCloudDamp, anomalyStdC, anomalyTauDays)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
-    SensorPhysics, peakTargetAdc, saturationAdc, sensorTempRefC)
+    SensorPhysics, peakTargetAdc, saturationAdc, sensorTempRefC, tSensQuantC)
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(
     RunConfig,
     startEpochMs, horizonDays, cadenceDays, initialOffsetMs,
-    fit, maxPpmStep, discipline, cloud, temp, sensor, ranges,
+    fit, maxPpmStep, discipline, lightCompEnabled,
+    cloud, temp, sensor, ranges,
     numDeployments, seedBase, detailedDeployment, curveStrideDays, outDir)
 
 }  // namespace sim

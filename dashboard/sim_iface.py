@@ -16,6 +16,7 @@ import runs as runlib
 # CI build flags (match .github/workflows/ci.yml).
 SIM_SOURCES = [
     "src/SolarModel.cpp", "src/SolarFit.cpp", "src/DriftClock.cpp", "src/Discipline.cpp",
+    "src/Sircadian.cpp",
     "sim/World.cpp", "sim/Deployment.cpp", "sim/Engine.cpp", "sim/sim.cpp",
 ]
 

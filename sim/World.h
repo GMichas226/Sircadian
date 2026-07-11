@@ -48,6 +48,7 @@ struct SensorPhysics {
     double peakTargetAdc  = 3200.0; // clear-noon ADC target before unit gain trim
     double saturationAdc  = 4095.0; // 12-bit ceiling (kept below NO_DATA=0xFFFF)
     double sensorTempRefC = 20.0;   // reference temperature for sensitivity
+    double tSensQuantC    = 0.0625; // temp sensor LSB (DS18B20 12-bit class)
 };
 
 enum Regime { REGIME_CLEAR = 0, REGIME_BROKEN = 1, REGIME_OVERCAST = 2 };
@@ -65,6 +66,12 @@ public:
 
     // Indoor temperature (degC) at true local minute-of-day (0..1439).
     double indoorTempC(int trueMin) const;
+
+    // What the device's temperature sensor READS at that minute: indoor truth
+    // plus the unit's calibration offset, per-read noise, and LSB
+    // quantization. Consumes the temp-sensor RNG stream -- call at most once
+    // per sampled minute, in order.
+    double sensedTempC(int trueMin);
 
     // Fill obs[1440] (device-local-minute indexed) for a fit. clockErrMin =
     // reported - true local minute, so device minute m sees true minute
@@ -87,6 +94,7 @@ private:
 
     Rng    weatherRng_;   // weather realization (beginDay)
     Rng    sensorRng_;    // sensor noise/dropout (sampleObs)
+    Rng    tempSensRng_;  // temperature-sensor read noise (sensedTempC)
 
     double synoptic_ = 0.0;   // AR(1) cloudiness anomaly (carried across days)
     double tempAnom_ = 0.0;   // AR(1) temperature anomaly (carried across days)

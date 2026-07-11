@@ -1,0 +1,26 @@
+{
+  "name": "Sircadian",
+  "version": "1.0.0",
+  "description": "RTC-less, network-less wall clock disciplined by daylight: fits a photoresistor's daily light curve against the astronomical clear-sky curve, learns oscillator drift, optionally learns the crystal's temperature coefficient online.",
+  "keywords": ["clock", "rtc", "solar", "timekeeping", "drift", "photoresistor", "temperature-compensation"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GMichas226/Sircadian.git"
+  },
+  "authors": [
+    { "name": "Georgios Michalopoulos", "maintainer": true }
+  ],
+  "license": "Apache-2.0",
+  "frameworks": "*",
+  "platforms": "*",
+  "headers": "Sircadian.h",
+  "export": {
+    "exclude": [
+      "sim", "dashboard", "test", "tools", "runs", ".github",
+      "handoff.md", "CMakeLists.txt", "*.exe"
+    ]
+  },
+  "build": {
+    "srcDir": "src"
+  }
+}

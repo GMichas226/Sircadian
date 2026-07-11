@@ -1,217 +1,280 @@
 # Sircadian
 
-A wall clock for a microcontroller that has **no real-time-clock chip and no
-internet** — it keeps time by watching daylight and comparing it to where the
-sun mathematically *should* be.
+A microcontroller without a real-time-clock chip loses the wall time at every
+power interruption, and its crystal oscillator drifts by tens of parts per
+million, varying with temperature. The conventional remedies are a
+battery-backed RTC module or periodic synchronization over a network. Sircadian
+requires neither: a photoresistor records ambient light through the day, and the
+device fits the measured light curve against the astronomical clear-sky curve
+computed for its date and location. The offset between the two is a direct
+measurement of the clock's accumulated error, from which the oscillator's drift
+is estimated and corrected. A single absolute time seed at installation is the
+only external reference the device needs.
 
-A bare MCU loses the wall clock on every power cut, and its crystal drifts (tens
-of ppm, temperature-dependent). The usual fixes are an RTC module or NTP over
-WiFi. Sircadian needs neither: a photoresistor logs ambient light through the
-day, and the device compares the measured light curve against the computed
-clear-sky curve for its date and location. The time gap between the two is a
-direct measurement of how far the clock has drifted.
+Sircadian is packaged as an Arduino library; the firmware in `src/` is plain
+C++17 with no hardware dependency.
 
-## How it works
+> **Status:** in deployment testing. The accuracy figures below are
+> simulation-derived, pending field measurement. See [Accuracy](#accuracy) and
+> [Limitations](#limitations).
 
-The sun is a clock you cannot lose. For any date and location, the time of
-solar noon (the daily peak of light) is fully determined by astronomy. If you
-record when the light *actually* peaks and compare it to when it *should* have
-peaked, the difference is your clock's error — measured against the sky.
+## Contents
 
-```
-   per-minute light samples (one local day)
-                │
-                ▼
-        SolarFit.fitDay ───────────────┐
-                │  slides the computed   │  rejects cloudy/
-                │  curve against the     │  ambiguous days
-                ▼  measured one          │
-        time offset τ (minutes)  ◀───────┘
-                │
-                ▼
-        driftPpmFromShift(τ, elapsed)
-                │
-                ▼
-        DriftClock.setDriftPpm(...) ──▶ drift-corrected wall time
-```
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quickstart](#quickstart)
+- [API](#api)
+- [Method](#method)
+- [Configuration](#configuration)
+- [Light-sensor temperature correction](#light-sensor-temperature-correction)
+- [Accuracy](#accuracy)
+- [Repository layout](#repository-layout)
+- [Building and testing](#building-and-testing)
+- [Simulator and dashboard](#simulator-and-dashboard)
+- [Limitations](#limitations)
+- [License](#license)
 
-The loop, once per clear day:
+## Requirements
 
-1. **Seed once.** Something hands `DriftClock` an absolute epoch — a phone
-   POSTing the time, a one-off NTP at install. This is the only outside time
-   the device ever needs.
-2. **Free-run.** `DriftClock` then keeps time entirely on its own, as
-   `epoch + monotonic_delta`, scaled by a learned drift figure (ppm). No
-   further network or RTC.
-3. **Observe.** Through the day you log ambient light into a 1440-slot,
-   one-sample-per-minute buffer.
-4. **Fit.** `SolarFit::fitDay` builds the theoretical clear-sky curve for the
-   day, then slides it in time against your measured curve. The shift that
-   makes the two line up best is the offset **τ** — how far the clock's idea of
-   "now" has drifted from the sun. The fit is *accepted* only if the day was
-   well-sampled, low-residual, and the best alignment is clearly better than
-   the runner-up; this is what throws out cloudy or partial days instead of
-   letting them corrupt the estimate.
-5. **Learn.** `driftPpmFromShift` divides τ by how long the clock has been
-   free-running to get a drift *rate* in ppm, and feeds it back into
-   `DriftClock`. Each clear day nudges the running estimate; over many days it
-   converges.
+The fit holds three 1440-entry buffers in RAM — the observation buffer
+(`uint16_t`, ≈2.8 KB) and two static scratch arrays (`float`, ≈5.6 KB;
+`int16_t`, ≈2.8 KB) — for a floor near 11 KB. This rules out 2 KB AVR parts
+(e.g. ATmega328/Uno). Target ESP8266, ESP32, STM32, or RP2040-class boards. A
+single ADC channel on a photoresistor divider is the only required peripheral.
 
-So `SolarModel` answers "where should the sun be?", `SolarFit` answers "how far
-off is my clock?", and `DriftClock` turns that answer into corrected time.
+## Installation
 
-**The model.** The clear-sky curve is Spencer (1971): a 3-harmonic solar
-declination and a 2-harmonic equation of time give solar noon for the date and
-location, then intensity ∝ `max(0, cos θz)^atmK` traces the day's rise and
-fall. `atmK` sets the curve's sharpness and is matched to the sensor. The
-coefficients live in [`src/SolarModel.h`](src/SolarModel.h); published model
-error is a few arc-minutes, below the 1-minute observation resolution.
+Sircadian is not in the Arduino Library Manager or the PlatformIO registry;
+install it from source.
 
-## Layout
-
-| File | Role | Dependencies |
-|------|------|--------------|
-| `src/SolarModel.*` | Clear-sky reference curve (pure math) | `<cmath>` only |
-| `src/SolarFit.*`   | Curve alignment → time offset τ        | SolarModel |
-| `src/DriftClock.*` | RTC-less wall clock with ppm correction | one monotonic-ms hook |
-| `src/config.h`     | Site/deployment values + tuning, in one place | none |
-| `test/test_fit.cpp`| Host test: recover a known τ, reject a cloudy day | none |
-
-Everything is plain C++17 with **no Arduino/hardware dependency**. Triggering,
-persistence, and the radio/power choreography are deliberately *not* included —
-that is application glue. Wire it up however your device works.
-
-## Build & test (host)
+**Arduino IDE** — clone into the sketchbook `libraries/` directory:
 
 ```sh
-g++ -std=c++17 -I src src/SolarModel.cpp src/SolarFit.cpp \
-    src/DriftClock.cpp test/test_fit.cpp -o test_fit && ./test_fit
+cd ~/Arduino/libraries        # or your sketchbook's libraries/ path
+git clone https://github.com/GMichas226/Sircadian.git
 ```
 
-The test synthesizes days of light readings at known offsets and checks that
-the fit recovers them (sub-minute), that a cloudy day is rejected, and that the
-drift math and clock correction have the right sign and scale.
+Restart the IDE. Alternatively, download the repository ZIP from GitHub and use
+*Sketch → Include Library → Add .ZIP Library*.
 
-## Simulator & dashboard
+**PlatformIO** — add the repository to `lib_deps` in `platformio.ini`:
 
-[`sim/`](sim/) is a deployment-level simulator that exercises the **real
-firmware** in `src/` (`SolarModel`, `SolarFit`, `DriftClock`) unchanged — so the
-sim doubles as end-to-end validation. A *run* is a **fleet of deployments**: many
-copies of one configuration, each a device dropped into its own randomly-rolled
-world, simulated **one process per deployment** (1 core per run).
-
-Beyond validation, the sim provides the error figures that guide firmware tuning.
-The discipline code in `src/` is adjusted against the metrics the fleet reports —
-steady-state clock error, time-to-converge, and accepted-fit fraction — one change
-at a time, keeping a change when those metrics improve and reverting it when they
-don't. The git history records that process, and `main` holds the lowest-error
-configuration measured so far. This commit is the starting baseline; the README is
-not re-edited for each tuning step.
-
-Each deployment is a coherent, layered, analytic world (deterministic given its
-seed): season + synoptic weather → cloud regime → intraday clear-sky-index trace;
-outdoor temperature → room thermal transfer (lag + greenhouse gain) → indoor
-temperature; the oscillator drifts off **indoor** temperature, and a nonlinear,
-temperature-dependent photoresistor logs the cloud-attenuated light. Climate, room,
-sensor unit, and oscillator characteristics are **rolled once per deployment**;
-the daily weather plays out within them. Each process is modeled to be realistic
-on its own terms — never tuned to provoke or flatter the discipline algorithm.
-
-Build and drive it from the CLI:
-
-```sh
-g++ -std=c++17 -O2 -I src -I sim \
-    src/SolarModel.cpp src/SolarFit.cpp src/DriftClock.cpp \
-    sim/World.cpp sim/Deployment.cpp sim/Engine.cpp sim/sim.cpp \
-    -o sim_run -Wall -Wextra -Werror
-sim_run --dump-defaults run.json          # editable default config
-sim_run --config run.json                 # run the fleet (serial) + summary.csv
+```ini
+lib_deps = https://github.com/GMichas226/Sircadian.git
 ```
 
-Or use the desktop control surface in [`dashboard/`](dashboard/README.md)
-(PySide6 + pyqtgraph): configure every parameter, build, launch the fleet across
-cores, and explore Monte-Carlo and per-deployment views. The engine sanity test is
-[`test/test_sim.cpp`](test/test_sim.cpp).
+Then `#include <Sircadian.h>`. The development directories (`sim/`,
+`dashboard/`, `test/`, `tools/`) are ignored by both toolchains.
 
-## Configuration
-
-Site and tuning values live in [`src/config.h`](src/config.h) as `#define`s,
-each `#ifndef`-guarded so you can either edit the file or override from the
-build (`-DSIRCADIAN_LAT=51.5f`). Set your location and sensor response there:
-
-```c
-#define SIRCADIAN_LAT  38.0f   // latitude,  deg N
-#define SIRCADIAN_LON  23.7f   // longitude, deg E
-#define SIRCADIAN_TZ   2.0f    // UTC offset, hours
-#define SIRCADIAN_ATMK 1.6f    // curve sharpness; calibrate to your sensor
-```
-
-The fit accept-thresholds (`SIRCADIAN_*`) are defined there too and feed the
-`FitConfig` defaults. The three worth understanding before you touch them:
-
-- **`atmK`** — curve sharpness. A wrong value biases the noon estimate, so
-  match it to your photoresistor's response.
-- **`unambiguityFactor`** — how much better the best alignment must be than the
-  runner-up. Higher = stricter = fewer but cleaner fits.
-- **`maxRmsOverAlpha`** — normalized residual ceiling; the main cloud filter.
-
-## Minimal usage
+## Quickstart
 
 ```cpp
-#include "SolarModel.h"
-#include "SolarFit.h"
-#include "DriftClock.h"
-#include "config.h"
+#include <Sircadian.h>
 using namespace solar;
 
-// Monotonic milliseconds for your platform (Arduino: return millis();).
-uint64_t nowMs();
+Sircadian sirc(sircadianMillis64);            // 64-bit-safe millis()
 
-DriftClock  clk(&nowMs);
-SolarParams loc = SIRCADIAN_SITE_PARAMS;   // from config.h
+void setup() {
+    SircadianConfig cfg;
+    cfg.site = SolarParams{ 38.0f, 23.7f, 2.0f, 1.6f };   // lat, lon, tz, atmK
+    sirc.begin(cfg);
+    sirc.setEpochMs(1783468800000LL);         // one-time seed: serial / NTP / button
+}
 
-void onTimeReceived(int64_t epochMs) { clk.setEpochMs(epochMs); }
-
-// Once a day, with a full day of per-minute light readings in obs[1440]
-// (unsampled minutes set to solar::NO_DATA):
-void nightlyFit(const uint16_t* obs) {
-    int doy = clk.dayOfYear(loc.tz);
-    FitResult r = fitDay(doy, obs, NO_DATA, loc, FitConfig{});
-    if (r.accepted) {
-        int32_t step = driftPpmFromShift(r.shiftMin, clk.secondsSinceSync());
-        // step is the clock's *observed* fast-rate, so remove it from the
-        // running correction (subtract, not add) -- adding it is positive
-        // feedback and the drift estimate diverges.
-        clk.setDriftPpm(clk.driftPpm() - step);
-        // persist clk.driftPpm() to NVS/flash here
+void loop() {
+    static uint32_t t = 0;
+    if (millis() - t >= 60000UL) {            // one sample per minute
+        t += 60000UL;
+        sirc.addLightSample(analogRead(A0));
+    }
+    sirc.service();                           // daily fit at local midnight
+    if (sirc.isSynced()) {
+        int64_t nowMs = sirc.epochMs();       // corrected wall time
     }
 }
 ```
 
-## Known limitations
+Full sketches are in [`examples/`](examples/):
+[`SolarClockBasic`](examples/SolarClockBasic/SolarClockBasic.ino),
+[`SolarClockLightComp`](examples/SolarClockLightComp/SolarClockLightComp.ino)
+(temperature correction), and
+[`RuntimeConfig`](examples/RuntimeConfig/RuntimeConfig.ino) (full runtime
+configuration).
 
-- **Needs an ESP32/STM32/RP2040-class MCU, not a classic AVR.** The day buffer
-  `obs[1440]` (~2.8 KB in the caller) plus the static theoretical curve
-  `g_ith[1440]` (~5.6 KB) need ~8.4 KB of RAM minimum, so an ATmega328 Arduino
-  Uno (2 KB) is out despite the "microcontroller" framing.
-- **Theoretical, not yet field-validated.** The accuracy figures implied by the
-  model (Spencer-71 errors, ppm noise floor) are *derived*, not measured against
-  a reference clock. Treat this as a working design pending logged field data —
-  PRs with real drift-vs-reference traces very welcome.
-- **1-minute resolution.** Input is per-minute means, so the raw shift search
-  steps in whole minutes; parabolic interpolation recovers sub-minute, but the
-  input granularity is the floor.
-- **Needs clear days.** Cloudy/partial curves are rejected by the unambiguity
-  and residual gates (a feature — bad data doesn't corrupt the estimate), so
-  overcast climates converge more slowly. Shifts landing near `k + 0.5` minutes
-  are the worst case for the gate and may be rejected even on a clear day; they
-  get picked up once the offset drifts off the midpoint.
-- **Accuracy is bounded by the sensor.** A miscalibrated `atmK` or a non-linear
-  photoresistor response biases the recovered noon.
+## API
+
+The `Sircadian` object owns the light buffer, the fit cadence, and the
+discipline loop.
+
+| Member | Purpose |
+|--------|---------|
+| `Sircadian(nowMs)` | Construct with a monotonic-milliseconds function (`sircadianMillis64` on Arduino). |
+| `begin(cfg)` | Apply `SircadianConfig`; resets learned state. |
+| `setEpochMs(ms)` | One-time absolute seed of wall time. |
+| `addLightSample(adc)` | Record one ADC reading, filed under the clock's current minute. |
+| `setTemperature(tC)` | Optional; enables light-sensor temperature correction. Does not affect clock rate. |
+| `service()` | Called each loop; fits the completed day at local-midnight rollover and disciplines the clock. |
+| `epochMs()`, `isSynced()` | Corrected wall time; seed state. |
+| `appliedPpm()`, `lastFit()` | Learned drift rate; most recent fit result. |
+| `exportState()`, `importState()` | Persist and restore the learned drift across reboots. |
+
+The primitives (`SolarModel`, `SolarFit`, `DriftClock`, `Discipline`) remain
+public for applications supplying their own buffering or fit cadence.
+
+## Method
+
+For a given date and location, the time of solar noon is fixed by astronomy.
+Sircadian records ambient light once per minute over a local day and aligns the
+measured curve against the computed clear-sky curve. The time shift τ that
+minimizes the residual between the two is the clock's offset from solar time.
+Dividing τ by the interval since the last synchronization gives a drift rate in
+parts per million, which the discipline loop feeds back to the clock.
+
+The clock is seeded once with an absolute epoch and thereafter free-runs as
+`epoch + monotonic_delta`, scaled by the learned drift. A fit is accepted only
+when the day is well-sampled, the normalized residual is below a threshold, and
+the best alignment is sufficiently better than the second-best; this rejects
+cloudy and partial days rather than admitting them into the estimate. Each
+accepted day adjusts the running drift estimate, which converges over successive
+clear days.
+
+The clear-sky curve uses the Spencer (1971) series: a three-harmonic
+declination and two-harmonic equation of time set solar noon for the date and
+location, and intensity follows `max(0, cos θz)^atmK`, where `atmK` sets the
+curve's sharpness and is matched to the sensor. Published model error is a few
+arc-minutes, below the one-minute observation resolution. Coefficients are in
+[`src/SolarModel.h`](src/SolarModel.h).
+
+## Configuration
+
+All parameters are configurable at runtime through `SircadianConfig`, with
+defaults defined as `#ifndef`-guarded macros in [`src/config.h`](src/config.h),
+so a constrained build can set them from the compiler
+(`-DSIRCADIAN_LAT=51.5f`) and omit runtime configuration entirely.
+
+```c
+#define SIRCADIAN_LAT  38.0f   // latitude, deg N
+#define SIRCADIAN_LON  23.7f   // longitude, deg E
+#define SIRCADIAN_TZ   2.0f    // UTC offset, hours
+#define SIRCADIAN_ATMK 1.6f    // curve sharpness; calibrate to the sensor
+```
+
+Three fit gates govern acceptance: `atmK` (curve sharpness; a wrong value biases
+the noon estimate), `unambiguityFactor` (how much the best alignment must beat
+the runner-up), and `maxRmsOverAlpha` (the normalized-residual ceiling and
+primary cloud filter).
+
+## Light-sensor temperature correction
+
+A photoresistor's gain varies with temperature as approximately
+`1 + k·(T − Tref)`. Because room temperature peaks in the afternoon, this drift
+distorts the logged light curve asymmetrically about noon and biases the fitted
+solar noon. Given `k` from a one-time bench calibration, feeding
+`setTemperature()` before each `addLightSample()` divides the sample back to its
+reference temperature before the fit:
+
+```
+corrected = dark + (adc − dark) / (1 + lightTempco·(T − lightTempRefC))
+```
+
+The correction costs one division per sample and no additional RAM, requires no
+learning, and is disabled by default. It is inert unless `lightCompEnabled` is
+set and a temperature has been supplied. See
+[`SolarClockLightComp`](examples/SolarClockLightComp/SolarClockLightComp.ino).
+
+## Accuracy
+
+The figures below are derived in simulation, not measured against a reference
+clock. They come from a fleet of 64 independent deployments simulated over five
+years each; location, climate, room thermal response, sensor unit, and
+oscillator are randomized per deployment.
+
+| Metric | Median | Mean | Worst unit |
+|--------|-------:|-----:|-----------:|
+| Steady-state clock error | 111 s | 114 s | 171 s |
+| Worst-case error | 372 s | 386 s | 689 s |
+| Accepted-fit fraction | 0.96 | 0.95 | — |
+
+Every deployment converges and holds steady-state error below 300 s. Error is
+driven primarily by cloud fraction and latitude.
+
+## Repository layout
+
+| Path | Contents |
+|------|----------|
+| `src/Sircadian.*` | Library facade: buffer, fit cadence, discipline, temperature correction. |
+| `src/SolarModel.*` | Clear-sky reference curve (`<cmath>` only). |
+| `src/SolarFit.*` | Curve alignment producing the offset τ. |
+| `src/DriftClock.*` | RTC-less wall clock with ppm correction. |
+| `src/Discipline.*` | Offset-and-rate discipline loop. |
+| `src/config.h` | Compile-time defaults. |
+| `examples/` | Three reference sketches. |
+| `test/` | Host tests. |
+| `sim/`, `dashboard/`, `tools/` | Development-only simulator, GUI, and analysis. |
+
+## Building and testing
+
+The library and its host tests build with any C++17 toolchain via CMake
+(≥ 3.16). The `src/` and `sim/` source sets are declared once in
+[`CMakeLists.txt`](CMakeLists.txt), so the whole build collapses to:
+
+```sh
+cmake -B build
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+On Windows, configure with the g++ toolchain to match the usual build — for
+example `cmake -B build -G "MinGW Makefiles"` (or `-G Ninja`). Warnings are
+treated as errors on GCC/Clang, so the build stays clean.
+
+This runs four tests: `test_fit` recovers known offsets from synthesized days
+(sub-minute) and rejects a cloudy one, `test_clock` checks the sign and scale of
+the drift correction, `test_facade` confirms the facade reproduces the manual
+composition exactly (including temperature correction), and `test_sim` is the
+engine sanity check (clean deployments converge, overcast stays bounded).
+
+Without CMake, the core firmware test still builds with a single `g++`
+invocation:
+
+```sh
+g++ -std=c++17 -I src src/SolarModel.cpp src/SolarFit.cpp src/DriftClock.cpp \
+    src/Discipline.cpp test/test_fit.cpp -o test_fit && ./test_fit
+```
+
+## Simulator and dashboard
+
+[`sim/`](sim/) exercises the unmodified firmware in `src/` against a synthetic
+but physically-modeled environment, so it serves as end-to-end validation and
+the source of the [accuracy](#accuracy) figures. Each deployment's world is
+deterministic given its seed and is modeled independently of the discipline
+algorithm.
+
+The same CMake build produces the `sim_run` CLI:
+
+```sh
+cmake --build build                        # builds sim_run alongside the tests
+build/sim_run --dump-defaults run.json     # write an editable default config
+build/sim_run --config run.json            # run the fleet and emit summary CSVs
+```
+
+(With single-config generators such as MinGW Makefiles the binary is
+`build/sim_run.exe`.) A PySide6 desktop GUI in
+[`dashboard/`](dashboard/README.md) configures, builds, runs, and visualizes
+fleets.
+
+## Limitations
+
+- Accuracy is derived in simulation, not measured against a reference clock.
+- Requires ~11 KB RAM; unsuitable for 2 KB AVR parts.
+- Observation resolution is one minute; sub-minute offset is recovered by
+  parabolic interpolation but bounded by that input granularity.
+- Convergence requires clear days; overcast climates converge more slowly
+  because cloudy days are rejected by design.
+- A miscalibrated `atmK` or a non-linear sensor response biases the recovered
+  noon; the residual thermal-tilt bias is the current accuracy floor.
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE). Use it for anything,
-including commercial work; keep the copyright and attribution notices, and state
-any changes you make. The license includes an explicit patent grant from
-contributors.
+Apache 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE). The license includes
+an explicit patent grant from contributors.

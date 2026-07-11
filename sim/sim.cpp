@@ -45,7 +45,8 @@ static const char* SUMMARY_HEADER =
     "fits,accepts,lat,lon,atmK,base_cloud,season_amp,winter_peak_doy,t_mean_c,t_season_amp_c,"
     "t_diurnal_amp_c,room_lag_hours,greenhouse_gain_c,sensor_gamma,"
     "sensor_gain,sensor_dark_adc,sensor_tempco,sensor_noise_frac,sensor_drop_frac,"
-    "osc_ppm0,osc_tempco_a,osc_turnover_c,osc_aging_ppm_per_yr\n";
+    "osc_ppm0,osc_tempco_a,osc_turnover_c,osc_aging_ppm_per_yr,"
+    "t_sens_offset_c,t_sens_noise_c,light_cal_err_frac,light_cal_dark_err_adc\n";
 
 static void putd(FILE* f, double v) { if (!std::isnan(v)) fprintf(f, "%.6g", v); }
 
@@ -61,8 +62,10 @@ static void writeSummaryRow(FILE* f, const DeploymentResult& r) {
     fprintf(f, "%.6g,%.6g,%.6g,%.6g,%.6g,%.6g,",
             p.sensorGamma, p.sensorGain, p.sensorDarkAdc,
             p.sensorTempco, p.sensorNoiseFrac, p.sensorDropFrac);
-    fprintf(f, "%.6g,%.6g,%.6g,%.6g\n",
+    fprintf(f, "%.6g,%.6g,%.6g,%.6g,",
             p.oscPpm0, p.oscTempcoA, p.oscTurnoverC, p.oscAgingPpmPerYr);
+    fprintf(f, "%.6g,%.6g,%.6g,%.6g\n", p.tSensOffsetC, p.tSensNoiseC,
+            p.lightCalErrFrac, p.lightCalDarkErrAdc);
 }
 
 static void writeDeployment(const std::string& outDir, const DeploymentResult& r) {
@@ -83,7 +86,8 @@ static void writeDeployment(const std::string& outDir, const DeploymentResult& r
                     row.truePpm, row.learnedPpm, row.indoorTempC, row.cloudiness,
                     row.regime);
             putd(d, row.shiftMin); fprintf(d, ",%d,", row.nUsed);
-            putd(d, row.rmsOverAlpha); fprintf(d, "\n");
+            putd(d, row.rmsOverAlpha);
+            fprintf(d, "\n");
         }
         fclose(d);
     }

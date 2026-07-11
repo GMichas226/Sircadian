@@ -29,6 +29,11 @@ DeploymentParams rollDeployment(uint64_t seed, const DeploymentRanges& r) {
     d.oscTempcoA     = r.oscTempcoA.roll(rng);
     d.oscTurnoverC   = r.oscTurnoverC.roll(rng);
     d.oscAgingPpmPerYr = r.oscAgingPpmPerYr.roll(rng);
+    // Appended draws only (keeps every earlier roll identical per seed).
+    d.tSensOffsetC   = r.tSensOffsetC.roll(rng);
+    d.tSensNoiseC    = r.tSensNoiseC.roll(rng);
+    d.lightCalErrFrac    = r.lightCalErrFrac.roll(rng);
+    d.lightCalDarkErrAdc = r.lightCalDarkErrAdc.roll(rng);
     return d;
 }
 

@@ -68,6 +68,33 @@
 #endif
 
 // ---------------------------------------------------------------------------
+// Section A2 — Light-sensor temperature correction. Photoresistor sensitivity
+// drifts with temperature (gain ~ 1 + k*(T - Tref)); because room temperature
+// peaks mid-afternoon, that drift skews the measured light curve
+// time-asymmetrically and biases the fitted noon. With the sensor's tempco
+// known from a bench calibration, dividing each dark-relative sample by the
+// gain undoes it. Off by default; costs one divide per sample and no RAM.
+// ---------------------------------------------------------------------------
+
+// Master switch: 1 = addLightSample() corrects each sample using the most
+// recent setTemperature() reading.
+#ifndef SIRCADIAN_LIGHT_COMP
+#define SIRCADIAN_LIGHT_COMP            0
+#endif
+// Fractional sensitivity change per degC (bench-calibrated for the unit).
+#ifndef SIRCADIAN_LIGHT_TEMPCO
+#define SIRCADIAN_LIGHT_TEMPCO          0.0f
+#endif
+// Temperature at which the calibration was taken (gain = 1 there).
+#ifndef SIRCADIAN_LIGHT_TREF_C
+#define SIRCADIAN_LIGHT_TREF_C          20.0f
+#endif
+// Dark/offset ADC level (measurable at night); the gain acts on adc - dark.
+#ifndef SIRCADIAN_LIGHT_DARK_ADC
+#define SIRCADIAN_LIGHT_DARK_ADC        0.0f
+#endif
+
+// ---------------------------------------------------------------------------
 // Section B — Internal constants (rarely changed; here to avoid magic numbers)
 // ---------------------------------------------------------------------------
 

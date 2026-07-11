@@ -34,8 +34,18 @@ public:
     // epochMs() adds localDt * ppm/1e6, so positive ppm makes the REPORTED
     // wall time advance faster than the raw monotonic delta -- which is the
     // correction you apply to compensate an oscillator that runs slow.
+    // NOTE: the rate applies retroactively over the whole span since the rate
+    // anchor (last setEpochMs/slewRatePpm) -- use slewRatePpm() to change the
+    // rate going FORWARD only.
     void setDriftPpm(int32_t ppm) { driftPpm_ = ppm; }
     int32_t driftPpm() const { return driftPpm_; }
+
+    // Change the drift correction from NOW on without rewriting history:
+    // folds the correction accrued so far into the rate anchor, then applies
+    // the new rate, so epochMs() integrates a piecewise-constant rate. Does
+    // NOT count as a sync -- secondsSinceSync() is unaffected. Before the
+    // first setEpochMs() this is just setDriftPpm().
+    void slewRatePpm(int32_t ppm);
 
     // Local-time helpers. tzHours is the UTC offset in hours.
     int32_t localSecondOfDay(float tzHours) const; // 0..86399, -1 if unsynced
@@ -44,10 +54,11 @@ public:
 
 private:
     MonotonicMsFn now_;
-    int64_t epochAtSet_ = 0;
-    int64_t localAtSet_ = 0;
-    int32_t driftPpm_   = 0;
-    bool    synced_     = false;
+    int64_t epochAtSet_  = 0;   // rate anchor: epoch at last set/slew
+    int64_t localAtSet_  = 0;   // rate anchor: monotonic ms at last set/slew
+    int64_t localAtSync_ = 0;   // sync anchor: monotonic ms at last setEpochMs
+    int32_t driftPpm_    = 0;
+    bool    synced_      = false;
 };
 
 }  // namespace solar

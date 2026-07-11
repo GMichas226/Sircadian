@@ -49,6 +49,17 @@ struct DeploymentRanges {
     Range oscTempcoA     { -0.045, -0.025 };// tuning-fork ppm per degC^2 (<0)
     Range oscTurnoverC   { 20.0, 30.0 };   // tempco turnover temperature
     Range oscAgingPpmPerYr{ -3.0, 3.0 };   // linear aging
+    // Temperature sensor unit (DS18B20-class digital sensor next to the
+    // board). Rolled last so older (seed, ranges) pairs reproduce the same
+    // deployments for every pre-existing parameter.
+    Range tSensOffsetC   { -1.0, 1.0 };    // per-unit calibration offset
+    Range tSensNoiseC    { 0.05, 0.25 };   // per-read noise sd, degC
+    // Light-sensor bench calibration quality (also appended last). The device
+    // corrects samples with kSens_known = sensorTempco * (1 + lightCalErrFrac)
+    // and dark_known = sensorDarkAdc + lightCalDarkErrAdc; zeroing both ranges
+    // models a perfect (oracle) calibration.
+    Range lightCalErrFrac   { -0.25, 0.25 }; // relative error on known tempco
+    Range lightCalDarkErrAdc{ -10.0, 10.0 }; // error on known dark level (ADC)
 };
 
 // Resolved fixed characteristics for ONE deployment.
@@ -60,6 +71,8 @@ struct DeploymentParams {
     double sensorGamma, sensorGain, sensorDarkAdc, sensorTempco,
            sensorNoiseFrac, sensorDropFrac;
     double oscPpm0, oscTempcoA, oscTurnoverC, oscAgingPpmPerYr;
+    double tSensOffsetC, tSensNoiseC;
+    double lightCalErrFrac, lightCalDarkErrAdc;
 };
 
 // Roll one deployment's fixed characteristics. Draw order is fixed so a given

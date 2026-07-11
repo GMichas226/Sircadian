@@ -28,13 +28,15 @@ SCALAR_SECTIONS = [
         ("cloud.broken.tauMin", "f"),
         ("cloud.overcast.kbar", "f"), ("cloud.overcast.sigma", "f"),
         ("cloud.overcast.tauMin", "f")]),
+    ("Light-sensor temp correction (device)", [
+        ("lightCompEnabled", "i")]),
     ("Temperature physics (universal)", [
         ("temp.summerPeakDoy", "i"), ("temp.peakHour", "f"),
         ("temp.diurnalCloudDamp", "f"), ("temp.anomalyStdC", "f"),
         ("temp.anomalyTauDays", "f")]),
     ("Sensor physics (universal)", [
         ("sensor.peakTargetAdc", "f"), ("sensor.saturationAdc", "f"),
-        ("sensor.sensorTempRefC", "f")]),
+        ("sensor.sensorTempRefC", "f"), ("sensor.tSensQuantC", "f")]),
     ("Run / sweep", [
         ("numDeployments", "i"), ("seedBase", "i64"),
         ("detailedDeployment", "i"), ("curveStrideDays", "i")]),
@@ -54,6 +56,10 @@ RANGE_SECTIONS = [
       "sensorNoiseFrac", "sensorDropFrac"]),
     ("Oscillator (rolled per deployment)",
      ["oscPpm0", "oscTempcoA", "oscTurnoverC", "oscAgingPpmPerYr"]),
+    ("Temp sensor unit (rolled per deployment)",
+     ["tSensOffsetC", "tSensNoiseC"]),
+    ("Light-sensor bench calibration (rolled per deployment)",
+     ["lightCalErrFrac", "lightCalDarkErrAdc"]),
 ]
 
 
