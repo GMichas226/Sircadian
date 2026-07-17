@@ -11,12 +11,15 @@ using std::isfinite;
 // re-entrantly.
 // thread_local so concurrent fitDay calls on different threads (the Phase B
 // Monte-Carlo workers) each get private scratch; single-threaded behavior is
-// unchanged. ~8.6 KB per thread.
+// unchanged. ~6.8 KB per thread.
 static thread_local float g_ith[SIRCADIAN_MINUTES_PER_DAY];
 
 // Contributing-sample indices for the current fitDay, built once per call and
-// reused across the tau sweep. Per-thread, like g_ith.
-static thread_local int16_t g_obsIdx[SIRCADIAN_MINUTES_PER_DAY];
+// reused across the tau sweep. Per-thread, like g_ith. Sized to the compiled
+// cost-window default (fitDay rejects any wider caller-supplied window --
+// see the capacity guard there).
+static constexpr int kMaxObsIdx = 2 * SIRCADIAN_COST_HALF_WINDOW_MIN + 1;
+static thread_local int16_t g_obsIdx[kMaxObsIdx];
 
 // Wrap an index into [0, day) without a modulo (the shift is bounded). The single
 // correction is valid only while the argument stays in [-day, 2*day); the
@@ -78,6 +81,10 @@ FitResult fitDay(int doy, const uint16_t* obs, uint16_t noData,
     int noonI = (int)(ctx.noonMin + 0.5f);
     int lo    = noonI - cfg.costHalfWindowMin;
     int hi    = noonI + cfg.costHalfWindowMin;
+
+    // A caller-supplied window wider than the compiled g_obsIdx capacity
+    // would overflow the pre-pass write below; reject cleanly instead.
+    if (hi - lo + 1 > kMaxObsIdx) return r;
 
     // Pre-pass: gather the contributing samples once. The set and sum(o^2) are
     // tau-invariant, so building them here keeps them out of the tau sweep.

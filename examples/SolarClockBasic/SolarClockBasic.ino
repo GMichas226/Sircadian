@@ -10,8 +10,9 @@
 // its own drift from the result. Clear days teach it; cloudy days are
 // rejected automatically.
 //
-// RAM note: the day buffer is ~2.9 KB, so this needs an ESP8266/ESP32-class
-// board (or any MCU with >= 8 KB RAM). A classic Uno is too small.
+// RAM note: the day buffer is ~2.9 KB, plus fit-time scratch, for a floor
+// near 9.6 KB -- so this needs an ESP8266/ESP32-class board (or any MCU with
+// >= 12 KB RAM). A classic Uno is too small.
 
 #include <Sircadian.h>
 

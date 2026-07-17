@@ -36,11 +36,13 @@ C++17 with no hardware dependency.
 
 ## Requirements
 
-The fit holds three 1440-entry buffers in RAM — the observation buffer
-(`uint16_t`, ≈2.8 KB) and two static scratch arrays (`float`, ≈5.6 KB;
-`int16_t`, ≈2.8 KB) — for a floor near 11 KB. This rules out 2 KB AVR parts
-(e.g. ATmega328/Uno). Target ESP8266, ESP32, STM32, or RP2040-class boards. A
-single ADC channel on a photoresistor divider is the only required peripheral.
+The fit holds three buffers in RAM — the 1440-entry observation buffer
+(`uint16_t`, ≈2.8 KB), a 1440-entry static scratch curve (`float`, ≈5.6 KB),
+and a static scratch index array sized to the configured cost window
+(`int16_t`, ≈1.2 KB at the default ±300 min window) — for a floor near
+9.6 KB. This rules out 2 KB AVR parts (e.g. ATmega328/Uno). Target ESP8266,
+ESP32, STM32, or RP2040-class boards. A single ADC channel on a
+photoresistor divider is the only required peripheral.
 
 ## Installation
 
@@ -266,7 +268,7 @@ fleets.
 ## Limitations
 
 - Accuracy is derived in simulation, not measured against a reference clock.
-- Requires ~11 KB RAM; unsuitable for 2 KB AVR parts.
+- Requires ~9.6 KB RAM; unsuitable for 2 KB AVR parts.
 - Observation resolution is one minute; sub-minute offset is recovered by
   parabolic interpolation but bounded by that input granularity.
 - Convergence requires clear days; overcast climates converge more slowly
